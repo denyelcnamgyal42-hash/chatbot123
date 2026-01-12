@@ -566,6 +566,16 @@ def cleanup():
 import atexit
 atexit.register(cleanup)
 
+# ==================== Background Tasks ====================
+
+try:
+    from background_tasks import get_task_manager
+    task_manager = get_task_manager()
+    task_manager.start()
+    logger.info("✅ Background tasks started (auto checkout & vectorstore refresh)")
+except Exception as e:
+    logger.warning(f"⚠️ Could not start background tasks: {e}")
+
 # ==================== Main Entry Point ====================
 
 if __name__ == "__main__":
