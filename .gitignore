@@ -24,8 +24,6 @@ sessions.json
 *.log
 logs/
 
-config.py
-
 # OS
 .DS_Store
 Thumbs.db
