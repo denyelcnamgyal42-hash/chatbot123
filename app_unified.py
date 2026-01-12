@@ -568,13 +568,23 @@ atexit.register(cleanup)
 
 # ==================== Background Tasks ====================
 
-try:
-    from background_tasks import get_task_manager
-    task_manager = get_task_manager()
-    task_manager.start()
-    logger.info("✅ Background tasks started (auto checkout & vectorstore refresh)")
-except Exception as e:
-    logger.warning(f"⚠️ Could not start background tasks: {e}")
+def start_background_tasks():
+    """Start background tasks in a separate thread to avoid blocking app startup."""
+    def _start_tasks():
+        try:
+            from background_tasks import get_task_manager
+            task_manager = get_task_manager()
+            task_manager.start()
+            logger.info("✅ Background tasks started (auto checkout & vectorstore refresh)")
+        except Exception as e:
+            logger.warning(f"⚠️ Could not start background tasks: {e}")
+    
+    # Start in background thread so it doesn't block app startup
+    task_thread = Thread(target=_start_tasks, daemon=True)
+    task_thread.start()
+
+# Start background tasks when module is imported (works with gunicorn)
+start_background_tasks()
 
 # ==================== Main Entry Point ====================
 
@@ -587,6 +597,7 @@ if __name__ == "__main__":
     logger.info(f"Dashboard: http://localhost:{port}/")
     logger.info(f"Health check: http://localhost:{port}/health")
     
+    # Start Flask app - this must bind to port immediately
     app.run(
         host="0.0.0.0",
         port=port,
