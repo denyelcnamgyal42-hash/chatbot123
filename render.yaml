@@ -1,0 +1,31 @@
+services:
+  - type: web
+    name: botpocketflow
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: python app.py
+    envVars:
+      - key: PORT
+        value: 5000
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: WHATSAPP_ACCESS_TOKEN
+        sync: false
+      - key: WHATSAPP_PHONE_NUMBER_ID
+        sync: false
+      - key: WHATSAPP_VERIFY_TOKEN
+        sync: false
+      - key: GOOGLE_SHEET_ID
+        sync: false
+      - key: GOOGLE_SHEETS_CREDENTIALS_JSON
+        sync: false
+      - key: DASHBOARD_AUTH_TOKEN
+        sync: false
+      - key: MODEL_NAME
+        value: gpt-4o-mini
+      - key: DEBUG
+        value: false
+      - key: VECTORSTORE_PATH
+        value: vectorstore
+      - key: EMBEDDING_MODEL
+        value: sentence-transformers/all-MiniLM-L6-v2

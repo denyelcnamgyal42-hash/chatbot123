@@ -5,6 +5,8 @@ from typing import List, Dict, Optional, Any, Tuple
 import config
 import os
 import time
+import json
+import tempfile
 from datetime import datetime, timedelta, date
 from functools import lru_cache
 import logging
@@ -54,10 +56,28 @@ class GoogleSheetsManager:
         self._last_connection_attempt = current_time
         
         try:
-            # Check if credentials file exists
-            if not os.path.exists(config.GOOGLE_SHEETS_CREDENTIALS_PATH):
+            # Check if credentials are provided as environment variable (for Render deployment)
+            credentials_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+            credentials_path = None
+            
+            if credentials_json:
+                # Create temporary file from environment variable
+                try:
+                    creds_data = json.loads(credentials_json)
+                    temp_file = tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False)
+                    json.dump(creds_data, temp_file)
+                    temp_file.close()
+                    credentials_path = temp_file.name
+                    logger.info("✅ Using credentials from GOOGLE_SHEETS_CREDENTIALS_JSON environment variable")
+                except json.JSONDecodeError as e:
+                    raise ValueError(f"Invalid JSON in GOOGLE_SHEETS_CREDENTIALS_JSON: {e}")
+            elif os.path.exists(config.GOOGLE_SHEETS_CREDENTIALS_PATH):
+                # Use local file if it exists
+                credentials_path = config.GOOGLE_SHEETS_CREDENTIALS_PATH
+                logger.info(f"✅ Using credentials from file: {credentials_path}")
+            else:
                 raise FileNotFoundError(
-                    f"Google Sheets credentials file not found: {config.GOOGLE_SHEETS_CREDENTIALS_PATH}"
+                    f"Google Sheets credentials not found. Set GOOGLE_SHEETS_CREDENTIALS_JSON environment variable or provide file at: {config.GOOGLE_SHEETS_CREDENTIALS_PATH}"
                 )
             
             # Check if sheet ID is configured
@@ -72,7 +92,7 @@ class GoogleSheetsManager:
             
             # Load credentials
             creds = Credentials.from_service_account_file(
-                config.GOOGLE_SHEETS_CREDENTIALS_PATH, 
+                credentials_path, 
                 scopes=scope
             )
             
@@ -103,12 +123,18 @@ class GoogleSheetsManager:
             raise
     
     def _get_service_account_email(self) -> str:
-        """Get service account email from credentials file."""
+        """Get service account email from credentials file or environment variable."""
         try:
-            import json
-            with open(config.GOOGLE_SHEETS_CREDENTIALS_PATH, 'r') as f:
-                creds_data = json.load(f)
+            credentials_json = os.getenv("GOOGLE_SHEETS_CREDENTIALS_JSON")
+            if credentials_json:
+                creds_data = json.loads(credentials_json)
                 return creds_data.get('client_email', 'Not found')
+            elif os.path.exists(config.GOOGLE_SHEETS_CREDENTIALS_PATH):
+                with open(config.GOOGLE_SHEETS_CREDENTIALS_PATH, 'r') as f:
+                    creds_data = json.load(f)
+                    return creds_data.get('client_email', 'Not found')
+            else:
+                return 'Not found'
         except:
             return 'Not found'
     

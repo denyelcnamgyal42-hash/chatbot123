@@ -9,6 +9,7 @@ __pycache__/
 
 # Credentials
 credentials.json
+credentials_formatted.txt
 *.json
 !package.json
 sessions.json
