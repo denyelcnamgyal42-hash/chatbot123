@@ -117,15 +117,22 @@ def send_whatsapp_message(phone_number: str, message: str, message_id: str = Non
 
 def process_message_async():
     """Background worker to process messages."""
+    logger.info("🚀 Message processing worker thread started")
     while True:
         try:
-            data = message_queue.get()
+            # Use timeout to allow periodic health checks
+            try:
+                data = message_queue.get(timeout=1)
+            except:
+                continue  # Timeout is normal, just check again
+            
             if data is None:
+                logger.info("🛑 Worker thread received shutdown signal")
                 break
                 
             phone, text, name, message_id = data
             
-            logger.info(f"Processing async message from {phone}")
+            logger.info(f"📨 Processing async message from {phone}: {text[:50]}")
             
             try:
                 # Lazy import to avoid blocking app startup
