@@ -1,11 +1,12 @@
+"""Employee Dashboard API for managing orders."""
 from flask import Flask, request, jsonify, render_template
+from flask_cors import CORS
 import config
 from google_sheets import sheets_manager as enhanced_sheets
 import google_sheets
 from datetime import datetime, timedelta
 import json
 import logging
-
 
 app = Flask(__name__)
 CORS(app)
@@ -26,7 +27,6 @@ def dashboard():
     """Serve dashboard HTML."""
     return render_template('dashboard.html')
 
-# REMOVED: Order endpoints - System is now hotel reservations only
 
 @app.route('/api/notifications', methods=['GET'])
 def get_notifications():
@@ -42,7 +42,7 @@ def get_notifications():
         headers = notifications[0]
         recent_notifications = []
         
-        for row in notifications[-20:]:  # Last 20 notifications
+        for row in notifications[-20:]:  
             if not any(row):
                 continue
             
@@ -50,7 +50,7 @@ def get_notifications():
             recent_notifications.append(notif_dict)
         
         return jsonify({
-            'notifications': recent_notifications[::-1],  # Reverse to show newest first
+            'notifications': recent_notifications[::-1],  
             'count': len(recent_notifications)
         })
         
@@ -65,7 +65,7 @@ def get_pending_bookings():
         return jsonify({'error': 'Unauthorized'}), 401
     
     try:
-        # Get pending bookings sheet specifically
+
         pending_sheet = enhanced_sheets._get_or_create_pending_bookings_sheet()
         
         bookings = enhanced_sheets.read_all_data(pending_sheet)
@@ -79,9 +79,8 @@ def get_pending_bookings():
         pending_bookings = []
         current_month = None
         header_row_found = False
-        header_indices = {}  # Map header names to column indices
+        header_indices = {}  
         
-        # Process bookings organized by month sections
         for row_idx, row in enumerate(bookings):
             if not any(row):
                 continue
@@ -106,12 +105,15 @@ def get_pending_bookings():
                             break
                 continue
             
+            # Skip empty rows
             if not row_str or not any(row):
                 continue
             
+            # Only process rows after we've found the header row
             if not header_row_found:
                 continue
             
+            # This is a booking row - use header indices if available, otherwise use position
             booking_dict = {}
             for header_name in headers:
                 if header_name in header_indices:
@@ -121,21 +123,25 @@ def get_pending_bookings():
                     else:
                         booking_dict[header_name] = ''
                 else:
-
+                    # Fallback to position-based mapping
                     header_idx = headers.index(header_name) if header_name in headers else -1
                     if header_idx >= 0 and header_idx < len(row):
                         booking_dict[header_name] = str(row[header_idx]).strip() if row[header_idx] is not None else ''
                     else:
                         booking_dict[header_name] = ''
             
+            # Skip if this doesn't look like a booking row (no booking ID)
             if not booking_dict.get('Booking ID', '').strip():
                 continue
             
+            # Check status (case-insensitive) - default to pending if empty
             status = str(booking_dict.get('Status', booking_dict.get('status', ''))).strip().lower()
             if not status:
-                status = 'pending'  
+                status = 'pending'  # Default to pending if status is empty
             
+            # Include bookings with pending status or empty status
             if status in ['pending', 'pending_payment', '']:
+                # Normalize field names for dashboard template (convert to lowercase with underscores)
                 normalized_booking = {
                     'id': booking_dict.get('Booking ID', ''),
                     'booking_id': booking_dict.get('Booking ID', ''),
@@ -157,11 +163,13 @@ def get_pending_bookings():
                 }
                 pending_bookings.append(normalized_booking)
         
+        # Sort bookings: newer months first, then by check-in date within month
         def get_sort_key(booking):
             try:
                 check_in_str = booking.get('Check-in', booking.get('check-in', ''))
                 if check_in_str:
                     check_in_date = datetime.strptime(check_in_str, "%Y-%m-%d")
+                    # Return tuple: (year, month) reversed for descending, then date descending
                     return (-check_in_date.year, -check_in_date.month, check_in_date.date())
             except:
                 pass
@@ -207,6 +215,7 @@ def approve_booking(booking_id):
         )
         
         if success:
+            # update_booking_status already handles moving the booking and decrementing availability
             
             logger.info(f"✅ Booking {booking_id} approved")
             return jsonify({
@@ -272,7 +281,6 @@ def reject_booking(booking_id):
     except Exception as e:
         logger.error(f"❌ Error rejecting booking {booking_id}: {e}")
         return jsonify({'error': str(e)}), 500
-
 
 @app.route('/api/admin/reindex', methods=['POST'])
 def reindex_vectorstore():
