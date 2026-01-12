@@ -183,13 +183,7 @@ def ensure_worker_thread():
         _worker_thread_started = True
         logger.info("✅ Message processing worker thread initialized and started")
 
-# Gunicorn hooks to ensure worker thread starts in each worker process
-def post_fork(server, worker):
-    """Called after each worker process is forked by gunicorn."""
-    global _worker_thread_started
-    _worker_thread_started = False  # Reset flag for this worker
-    logger.info(f"🔄 Gunicorn worker {worker.pid} forked - starting worker thread")
-    ensure_worker_thread()
+# Note: Gunicorn post_fork hook is in gunicorn_config.py
 
 # Also ensure it starts on first request (fallback for non-gunicorn)
 @app.before_request
