@@ -24,6 +24,9 @@ logger = logging.getLogger(__name__)
 app = Flask(__name__)
 CORS(app)
 
+# Global variable to track if worker thread is started
+_worker_thread_started = False
+
 # Rate limiting
 limiter = Limiter(
     app=app, 
@@ -165,10 +168,23 @@ def process_message_async():
         except Exception as e:
             logger.error(f"❌ Error in async worker: {e}", exc_info=True)
 
-# Start background worker
-worker_thread = Thread(target=process_message_async, daemon=True)
-worker_thread.start()
-logger.info("✅ Message processing worker thread initialized and started")
+# Function to start worker thread (called on first request or app init)
+def ensure_worker_thread():
+    """Ensure the message processing worker thread is running."""
+    global _worker_thread_started
+    if not _worker_thread_started:
+        worker_thread = Thread(target=process_message_async, daemon=True)
+        worker_thread.start()
+        _worker_thread_started = True
+        logger.info("✅ Message processing worker thread initialized and started")
+
+# Start worker thread immediately (for non-gunicorn runs)
+ensure_worker_thread()
+
+# Also ensure it starts on first request (for gunicorn)
+@app.before_request
+def before_request():
+    ensure_worker_thread()
 
 # ==================== Dashboard Authentication ====================
 
