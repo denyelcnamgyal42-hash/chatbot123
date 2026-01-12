@@ -168,6 +168,7 @@ def process_message_async():
 # Start background worker
 worker_thread = Thread(target=process_message_async, daemon=True)
 worker_thread.start()
+logger.info("✅ Message processing worker thread initialized and started")
 
 # ==================== Dashboard Authentication ====================
 
