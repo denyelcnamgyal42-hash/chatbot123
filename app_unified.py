@@ -122,13 +122,17 @@ def process_message_async():
     """Background worker to process messages."""
     logger.info("🚀 Message processing worker thread started")
     import queue
+    logger.info(f"📊 Queue size at start: {message_queue.qsize()}")
     while True:
         try:
             # Use timeout to allow periodic health checks
             try:
+                logger.info(f"⏳ Waiting for message (queue size: {message_queue.qsize()})...")
                 data = message_queue.get(timeout=1)
+                logger.info(f"✅ Got message from queue: {data[0] if data else 'None'}")
             except queue.Empty:
-                continue  # Timeout is normal, just check again
+                # Timeout is normal, just check again
+                continue
             
             if data is None:
                 logger.info("🛑 Worker thread received shutdown signal")
