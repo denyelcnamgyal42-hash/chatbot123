@@ -129,17 +129,29 @@ def process_message_async():
             
             try:
                 # Lazy import to avoid blocking app startup
+                logger.info("🔄 Importing whatsapp_agent...")
                 from langchain_agent import whatsapp_agent
+                logger.info("✅ whatsapp_agent imported successfully")
+                
                 # Process with agent
+                logger.info(f"🤖 Processing message with agent: {text[:50]}...")
                 response_text = whatsapp_agent.process_message(text, phone, name)
+                logger.info(f"✅ Agent response generated: {response_text[:50]}...")
                 
                 # Send response
+                logger.info(f"📤 Sending response to {phone}")
                 send_whatsapp_message(phone, response_text, message_id)
+                logger.info(f"✅ Response sent successfully to {phone}")
                 
             except Exception as e:
                 logger.error(f"❌ Error in async processing: {e}", exc_info=True)
+                import traceback
+                logger.error(f"Full traceback: {traceback.format_exc()}")
                 error_msg = "I apologize, but I encountered an error. Please try again."
-                send_whatsapp_message(phone, error_msg, message_id)
+                try:
+                    send_whatsapp_message(phone, error_msg, message_id)
+                except Exception as send_error:
+                    logger.error(f"❌ Failed to send error message: {send_error}")
             
             message_queue.task_done()
             
