@@ -265,21 +265,36 @@ def handle_webhook():
                             
                             logger.info(f"📩 Message from {from_number}: {message_text}")
                             
-                            # Add to queue for async processing
-                            try:
-                                if not message_queue.full():
-                                    message_queue.put((
-                                        from_number,
-                                        message_text,
-                                        customer_name,
-                                        message_id
-                                    ))
-                                    logger.info(f"📥 Queued message from {from_number}")
-                                else:
-                                    logger.error("Message queue is full!")
-                                    send_whatsapp_message(from_number, "I'm busy. Please try again later.", message_id)
-                            except Exception as e:
-                                logger.error(f"Error queuing message: {e}")
+                            # Process message in background thread (same process as webhook)
+                            def process_in_background():
+                                try:
+                                    logger.info(f"🔄 Processing message from {from_number} in background thread")
+                                    # Lazy import to avoid blocking app startup
+                                    from langchain_agent import whatsapp_agent
+                                    logger.info("✅ whatsapp_agent imported successfully")
+                                    
+                                    # Process with agent
+                                    logger.info(f"🤖 Processing message with agent: {message_text[:50]}...")
+                                    response_text = whatsapp_agent.process_message(message_text, from_number, customer_name)
+                                    logger.info(f"✅ Agent response generated: {response_text[:50]}...")
+                                    
+                                    # Send response
+                                    logger.info(f"📤 Sending response to {from_number}")
+                                    send_whatsapp_message(from_number, response_text, message_id)
+                                    logger.info(f"✅ Response sent successfully to {from_number}")
+                                except Exception as e:
+                                    logger.error(f"❌ Error processing message: {e}", exc_info=True)
+                                    import traceback
+                                    logger.error(f"Full traceback: {traceback.format_exc()}")
+                                    error_msg = "I apologize, but I encountered an error. Please try again."
+                                    try:
+                                        send_whatsapp_message(from_number, error_msg, message_id)
+                                    except Exception as send_error:
+                                        logger.error(f"❌ Failed to send error message: {send_error}")
+                            
+                            # Start processing in background thread
+                            Thread(target=process_in_background, daemon=True).start()
+                            logger.info(f"📥 Started background processing for message from {from_number}")
         
         # Always return 200 immediately
         return jsonify({"status": "accepted"}), 200
