@@ -11,6 +11,7 @@ __pycache__/
 credentials.json
 *.json
 !package.json
+sessions.json
 
 # IDE
 .vscode/
