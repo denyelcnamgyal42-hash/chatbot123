@@ -10,7 +10,6 @@ from datetime import datetime
 from threading import Thread 
 from queue import Queue 
 from functools import wraps 
-from langchain_agent import whatsapp_agent
 from flask_limiter import Limiter 
 from flask_limiter.util import get_remote_address
 from google_sheets import sheets_manager as enhanced_sheets
@@ -129,6 +128,8 @@ def process_message_async():
             logger.info(f"Processing async message from {phone}")
             
             try:
+                # Lazy import to avoid blocking app startup
+                from langchain_agent import whatsapp_agent
                 # Process with agent
                 response_text = whatsapp_agent.process_message(text, phone, name)
                 
