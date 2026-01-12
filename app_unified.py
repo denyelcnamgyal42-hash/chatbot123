@@ -269,19 +269,39 @@ def handle_webhook():
                             def process_in_background():
                                 try:
                                     logger.info(f"🔄 Processing message from {from_number} in background thread")
+                                    logger.info(f"📝 Message text: {message_text}")
+                                    
                                     # Lazy import to avoid blocking app startup
-                                    from langchain_agent import whatsapp_agent
-                                    logger.info("✅ whatsapp_agent imported successfully")
+                                    logger.info("📦 Starting to import whatsapp_agent...")
+                                    try:
+                                        from langchain_agent import whatsapp_agent
+                                        logger.info("✅ whatsapp_agent imported successfully")
+                                    except Exception as import_error:
+                                        logger.error(f"❌ Failed to import whatsapp_agent: {import_error}", exc_info=True)
+                                        import traceback
+                                        logger.error(f"Import traceback: {traceback.format_exc()}")
+                                        raise
                                     
                                     # Process with agent
                                     logger.info(f"🤖 Processing message with agent: {message_text[:50]}...")
-                                    response_text = whatsapp_agent.process_message(message_text, from_number, customer_name)
-                                    logger.info(f"✅ Agent response generated: {response_text[:50]}...")
+                                    try:
+                                        response_text = whatsapp_agent.process_message(message_text, from_number, customer_name)
+                                        logger.info(f"✅ Agent response generated: {response_text[:50]}...")
+                                    except Exception as process_error:
+                                        logger.error(f"❌ Error in agent.process_message: {process_error}", exc_info=True)
+                                        import traceback
+                                        logger.error(f"Process traceback: {traceback.format_exc()}")
+                                        raise
                                     
                                     # Send response
                                     logger.info(f"📤 Sending response to {from_number}")
-                                    send_whatsapp_message(from_number, response_text, message_id)
-                                    logger.info(f"✅ Response sent successfully to {from_number}")
+                                    try:
+                                        send_whatsapp_message(from_number, response_text, message_id)
+                                        logger.info(f"✅ Response sent successfully to {from_number}")
+                                    except Exception as send_error:
+                                        logger.error(f"❌ Error sending message: {send_error}", exc_info=True)
+                                        raise
+                                        
                                 except Exception as e:
                                     logger.error(f"❌ Error processing message: {e}", exc_info=True)
                                     import traceback
