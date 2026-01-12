@@ -277,47 +277,11 @@ def handle_webhook():
                                     logger.info(f"🔄 Processing message from {from_number} in background thread")
                                     logger.info(f"📝 Message text: {message_text}")
                                     
-                                    # Lazy import to avoid blocking app startup
-                                    logger.info("📦 Starting to import whatsapp_agent...")
-                                    logger.info("⏳ This may take 10-30 seconds (initializing dense retrieval)...")
-                                    
-                                    # Set a timeout for the import (60 seconds)
+                                    # Import whatsapp_agent (should be pre-loaded, but import anyway)
+                                    logger.info("📦 Importing whatsapp_agent...")
                                     try:
-                                        # Import with timeout protection
-                                        import threading
-                                        import queue as thread_queue
-                                        
-                                        result_queue = thread_queue.Queue()
-                                        exception_queue = thread_queue.Queue()
-                                        
-                                        def do_import():
-                                            try:
-                                                from langchain_agent import whatsapp_agent
-                                                result_queue.put(whatsapp_agent)
-                                            except Exception as e:
-                                                exception_queue.put(e)
-                                        
-                                        import_thread = threading.Thread(target=do_import, daemon=True)
-                                        import_thread.start()
-                                        import_thread.join(timeout=60)  # 60 second timeout
-                                        
-                                        if import_thread.is_alive():
-                                            logger.error("❌ Import timed out after 60 seconds")
-                                            raise TimeoutError("whatsapp_agent import timed out")
-                                        
-                                        if not exception_queue.empty():
-                                            raise exception_queue.get()
-                                        
-                                        if result_queue.empty():
-                                            raise RuntimeError("Import completed but no result")
-                                        
-                                        whatsapp_agent = result_queue.get()
+                                        from langchain_agent import whatsapp_agent
                                         logger.info("✅ whatsapp_agent imported successfully")
-                                        
-                                    except TimeoutError:
-                                        logger.error("❌ Import timed out - dense retrieval initialization taking too long")
-                                        send_whatsapp_message(from_number, "I'm initializing. Please try again in a moment.", message_id)
-                                        return
                                     except Exception as import_error:
                                         logger.error(f"❌ Failed to import whatsapp_agent: {import_error}", exc_info=True)
                                         import traceback
@@ -704,8 +668,25 @@ def start_background_tasks():
     task_thread = Thread(target=_start_tasks, daemon=True)
     task_thread.start()
 
+# Pre-initialize whatsapp_agent in background to avoid first-message delay
+def preload_agent():
+    """Pre-load the agent in background so it's ready when messages arrive."""
+    def _preload():
+        try:
+            logger.info("🔄 Pre-loading whatsapp_agent in background...")
+            from langchain_agent import whatsapp_agent
+            logger.info("✅ whatsapp_agent pre-loaded successfully")
+        except Exception as e:
+            logger.warning(f"⚠️ Failed to pre-load agent: {e} - will load on first message")
+    
+    preload_thread = Thread(target=_preload, daemon=True)
+    preload_thread.start()
+
 # Start background tasks when module is imported (works with gunicorn)
 start_background_tasks()
+
+# Pre-load agent in background
+preload_agent()
 
 # ==================== Main Entry Point ====================
 
