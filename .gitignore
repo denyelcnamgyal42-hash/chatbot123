@@ -1,0 +1,33 @@
+# Environment
+.env
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Credentials
+credentials.json
+*.json
+!package.json
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+logs/
+
+config.py
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Vector Store
+vectorstore/
+embeddings/

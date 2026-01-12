@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Dashboard - Booking Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script>
+        const API_BASE = 'http://localhost:5001/api';
+        const AUTH_TOKEN = 'hotel-staff-2024';  // From your .env
+
+        async function fetchWithAuth(url, options = {}) {
+            options.headers = {
+                ...options.headers,
+                'Authorization': `Bearer ${AUTH_TOKEN}`,
+                'Content-Type': 'application/json'
+            };
+            const response = await fetch(url, options);
+            return response.json();
+        }
+
+        // Removed: loadPendingOrders - system is now bookings only
+
+        async function loadPendingBookings() {
+            try {
+                const data = await fetchWithAuth(`${API_BASE}/bookings/pending`);
+                const bookingsList = document.getElementById('bookingsList');
+                const bookingsCount = document.getElementById('bookingsCount');
+
+                bookingsCount.textContent = data.count || 0;
+
+                if (data.count === 0) {
+                    bookingsList.innerHTML = `
+                        <div class="text-center py-8">
+                            <i class="fas fa-check-circle text-green-500 text-4xl mb-4"></i>
+                            <p class="text-gray-600">No pending bookings. All caught up!</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                bookingsList.innerHTML = data.bookings.map(booking => `
+                    <div class="bg-white rounded-lg shadow p-4 mb-4 border-l-4 border-purple-500">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <h3 class="font-bold text-lg">${booking.room_type || 'Unknown Room'}</h3>
+                                <p class="text-sm text-gray-600">
+                                    <i class="fas fa-user mr-1"></i> ${booking.customer_name || 'Customer'} 
+                                    | <i class="fas fa-phone ml-2 mr-1"></i> ${booking.phone || 'No phone'}
+                                </p>
+                                <p class="text-sm text-gray-600 mt-1">
+                                    <i class="fas fa-hashtag mr-1"></i> ${booking.id || booking.booking_id || 'No ID'} 
+                                    | <i class="fas fa-calendar mr-1"></i> ${booking.check_in || 'N/A'} to ${booking.check_out || 'N/A'}
+                                    | <i class="fas fa-bed mr-1"></i> ${booking.num_rooms || 1} room(s)
+                                    | ₹${booking.price || 0}
+                                </p>
+                                <p class="text-xs text-gray-500 mt-2">
+                                    <i class="far fa-clock mr-1"></i> ${booking.created_at ? new Date(booking.created_at).toLocaleString() : 'Unknown time'}
+                                </p>
+                            </div>
+                            <div class="flex flex-col space-y-2">
+                                <button onclick="callCustomer('${booking.phone}')" 
+                                        class="bg-green-500 hover:bg-green-600 text-white px-4 py-2 rounded-lg flex items-center">
+                                    <i class="fas fa-phone mr-2"></i> Call
+                                </button>
+                                <div class="flex space-x-2">
+                                    <button onclick="approveBooking('${booking.id || booking.booking_id}')" 
+                                            class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-check mr-1"></i> Approve
+                                    </button>
+                                    <button onclick="rejectBooking('${booking.id || booking.booking_id}')" 
+                                            class="bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                                        <i class="fas fa-times mr-1"></i> Reject
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading bookings:', error);
+                bookingsList.innerHTML = `
+                    <div class="text-center py-8 text-red-500">
+                        <i class="fas fa-exclamation-triangle text-4xl mb-4"></i>
+                        <p>Error loading bookings. Please refresh.</p>
+                    </div>
+                `;
+            }
+        }
+
+        async function approveBooking(bookingId) {
+            if (!confirm(`Approve booking ${bookingId}? This confirms payment received.`)) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/bookings/${bookingId}/approve`, {
+                    method: 'POST'
+                });
+                if (response.error) {
+                    alert(`Error: ${response.error}`);
+                } else {
+                    alert('Booking approved! Room availability updated.');
+                    loadPendingBookings();
+                }
+            } catch (error) {
+                alert('Error approving booking');
+                console.error(error);
+            }
+        }
+
+        async function rejectBooking(bookingId) {
+            if (!confirm(`Reject booking ${bookingId}?`)) return;
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/bookings/${bookingId}/reject`, {
+                    method: 'POST'
+                });
+                if (response.error) {
+                    alert(`Error: ${response.error}`);
+                } else {
+                    alert('Booking rejected.');
+                    loadPendingBookings();
+                }
+            } catch (error) {
+                alert('Error rejecting booking');
+                console.error(error);
+            }
+        }
+
+        function callCustomer(phoneNumber) {
+            if (phoneNumber) {
+                window.open(`tel:${phoneNumber}`, '_blank');
+            } else {
+                alert('No phone number available');
+            }
+        }
+
+        // Removed: approveOrder, cancelOrder - system is now bookings only
+
+        async function loadNotifications() {
+            try {
+                const data = await fetchWithAuth(`${API_BASE}/notifications`);
+                const notificationsList = document.getElementById('notificationsList');
+
+                if (data.count === 0) {
+                    notificationsList.innerHTML = '<p class="text-gray-500">No notifications</p>';
+                    return;
+                }
+
+                notificationsList.innerHTML = data.notifications.map(notif => `
+                    <div class="p-3 border-b border-gray-200">
+                        <div class="flex justify-between">
+                            <span class="font-medium">${notif.type === 'new_booking' ? '🛏️ New Booking' : '📢 Notification'}</span>
+                            <span class="text-xs text-gray-500">${new Date(notif.created_at).toLocaleTimeString()}</span>
+                        </div>
+                        <p class="text-sm mt-1">${notif.customer_name || 'Customer'} - ${notif.room_type || 'Room'}</p>
+                        <p class="text-xs text-gray-600 mt-1">
+                            Status: <span class="font-medium ${notif.status === 'pending' ? 'text-yellow-600' : 'text-green-600'}">${notif.status}</span>
+                        </p>
+                    </div>
+                `).join('');
+
+            } catch (error) {
+                console.error('Error loading notifications:', error);
+            }
+        }
+
+        // Removed: loadInventorySummary - system is now bookings only
+
+        // Auto-refresh every 30 seconds
+        setInterval(() => {
+            loadPendingBookings();
+            loadNotifications();
+        }, 30000);
+
+        // Initial load
+        document.addEventListener('DOMContentLoaded', () => {
+            loadPendingBookings();
+            loadNotifications();
+
+            // Manual refresh button
+            document.getElementById('refreshBtn').addEventListener('click', () => {
+                loadPendingBookings();
+                loadNotifications();
+                alert('Data refreshed!');
+            });
+        });
+    </script>
+</head>
+
+<body class="bg-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-gray-800">
+                    <i class="fas fa-hotel mr-3"></i>Employee Dashboard
+                </h1>
+                <p class="text-gray-600">Manage hotel bookings & reservations</p>
+            </div>
+            <div class="flex items-center space-x-4">
+                <button id="refreshBtn"
+                    class="bg-blue-500 hover:bg-blue-600 text-white px-4 py-2 rounded-lg flex items-center">
+                    <i class="fas fa-sync-alt mr-2"></i> Refresh
+                </button>
+                <div class="text-right">
+                    <p class="text-sm text-gray-600" id="currentTime">Loading...</p>
+                    <script>
+                        function updateTime() {
+                            document.getElementById('currentTime').textContent =
+                                new Date().toLocaleTimeString();
+                        }
+                        setInterval(updateTime, 1000);
+                        updateTime();
+                    </script>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="bg-purple-100 p-3 rounded-full mr-4">
+                        <i class="fas fa-bed text-purple-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Pending Bookings</p>
+                        <p class="text-3xl font-bold" id="bookingsCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="bg-blue-100 p-3 rounded-full mr-4">
+                        <i class="fas fa-bell text-blue-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Notifications</p>
+                        <p class="text-3xl font-bold" id="notificationsCount">0</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-lg shadow p-6">
+                <div class="flex items-center">
+                    <div class="bg-green-100 p-3 rounded-full mr-4">
+                        <i class="fas fa-calendar-check text-green-600 text-2xl"></i>
+                    </div>
+                    <div>
+                        <p class="text-gray-600">Today's Bookings</p>
+                        <p class="text-3xl font-bold" id="todayBookingsCount">0</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <!-- Pending Bookings -->
+            <div class="lg:col-span-2">
+                <!-- Pending Bookings -->
+                <div class="bg-white rounded-lg shadow mt-6">
+                    <div class="border-b border-gray-200 p-4">
+                        <h2 class="text-xl font-bold flex items-center">
+                            <i class="fas fa-bed mr-2"></i> Pending Bookings
+                        </h2>
+                    </div>
+                    <div class="p-4 max-h-[500px] overflow-y-auto" id="bookingsList">
+                        <div class="text-center py-8">
+                            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto"></div>
+                            <p class="mt-4 text-gray-600">Loading bookings...</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Notifications -->
+                <div class="bg-white rounded-lg shadow mt-6">
+                    <div class="border-b border-gray-200 p-4">
+                        <h2 class="text-xl font-bold flex items-center">
+                            <i class="fas fa-bell mr-2"></i> Recent Activity
+                        </h2>
+                    </div>
+                    <div class="p-4 max-h-[300px] overflow-y-auto" id="notificationsList">
+                        <div class="text-center py-4">
+                            <div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-500 mx-auto"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Quick Actions -->
+            <div>
+                <!-- Quick Actions -->
+                <div class="bg-white rounded-lg shadow">
+                    <div class="border-b border-gray-200 p-4">
+                        <h2 class="text-xl font-bold flex items-center">
+                            <i class="fas fa-bolt mr-2"></i> Quick Actions
+                        </h2>
+                    </div>
+                    <div class="p-4">
+                        <div class="space-y-3">
+                            <button onclick="window.open('/api/bookings/pending?export=csv', '_blank')"
+                                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-3 rounded-lg flex items-center justify-between">
+                                <span><i class="fas fa-download mr-2"></i> Export Bookings</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+
+                            <button onclick="alert('Feature coming soon!')"
+                                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-3 rounded-lg flex items-center justify-between">
+                                <span><i class="fas fa-chart-bar mr-2"></i> View Reports</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+
+                            <button onclick="alert('Feature coming soon!')"
+                                class="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 px-4 py-3 rounded-lg flex items-center justify-between">
+                                <span><i class="fas fa-cog mr-2"></i> Settings</span>
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+
+                            <div class="pt-4 border-t border-gray-200">
+                                <p class="text-sm text-gray-600 mb-2">Need help?</p>
+                                <button onclick="window.open('mailto:support@example.com', '_blank')"
+                                    class="w-full bg-blue-50 hover:bg-blue-100 text-blue-700 px-4 py-2 rounded-lg text-sm">
+                                    <i class="fas fa-envelope mr-2"></i> Contact Support
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="mt-8 pt-8 border-t border-gray-200 text-center text-gray-600 text-sm">
+            <p>© 2024 Hotel Booking System | Employee Dashboard v1.0</p>
+            <p class="mt-1">Auto-refreshes every 30 seconds | Last updated: <span id="lastUpdated">Just now</span></p>
+            <script>
+                document.getElementById('lastUpdated').textContent = new Date().toLocaleTimeString();
+            </script>
+        </div>
+    </div>
+</body>
+
+</html>
