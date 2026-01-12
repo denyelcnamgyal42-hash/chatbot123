@@ -3,7 +3,7 @@ services:
     name: botpocketflow
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 app_unified:app
+    startCommand: gunicorn --bind 0.0.0.0:$PORT --workers 1 --threads 4 --config gunicorn_config.py app_unified:app
     envVars:
       - key: PORT
         value: 5000
