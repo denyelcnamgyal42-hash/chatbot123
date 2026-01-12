@@ -121,12 +121,13 @@ def send_whatsapp_message(phone_number: str, message: str, message_id: str = Non
 def process_message_async():
     """Background worker to process messages."""
     logger.info("🚀 Message processing worker thread started")
+    import queue
     while True:
         try:
             # Use timeout to allow periodic health checks
             try:
                 data = message_queue.get(timeout=1)
-            except:
+            except queue.Empty:
                 continue  # Timeout is normal, just check again
             
             if data is None:
