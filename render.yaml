@@ -2,7 +2,7 @@ services:
   - type: web
     name: botpocketflow
     env: python
-    buildCommand: uv add -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: gunicorn --bind 0.0.0.0:$PORT app_unified:app
     envVars:
       - key: PORT
