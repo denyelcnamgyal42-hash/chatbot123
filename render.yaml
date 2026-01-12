@@ -3,7 +3,7 @@ services:
     name: botpocketflow
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: python app.py
+    startCommand: python app_unified.py
     envVars:
       - key: PORT
         value: 5000
