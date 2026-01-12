@@ -267,15 +267,57 @@ def handle_webhook():
                             
                             # Process message in background thread (same process as webhook)
                             def process_in_background():
+                                import signal
+                                import sys
+                                
+                                def timeout_handler(signum, frame):
+                                    raise TimeoutError("Import took too long")
+                                
                                 try:
                                     logger.info(f"🔄 Processing message from {from_number} in background thread")
                                     logger.info(f"📝 Message text: {message_text}")
                                     
                                     # Lazy import to avoid blocking app startup
                                     logger.info("📦 Starting to import whatsapp_agent...")
+                                    logger.info("⏳ This may take 10-30 seconds (initializing dense retrieval)...")
+                                    
+                                    # Set a timeout for the import (60 seconds)
                                     try:
-                                        from langchain_agent import whatsapp_agent
+                                        # Import with timeout protection
+                                        import threading
+                                        import queue as thread_queue
+                                        
+                                        result_queue = thread_queue.Queue()
+                                        exception_queue = thread_queue.Queue()
+                                        
+                                        def do_import():
+                                            try:
+                                                from langchain_agent import whatsapp_agent
+                                                result_queue.put(whatsapp_agent)
+                                            except Exception as e:
+                                                exception_queue.put(e)
+                                        
+                                        import_thread = threading.Thread(target=do_import, daemon=True)
+                                        import_thread.start()
+                                        import_thread.join(timeout=60)  # 60 second timeout
+                                        
+                                        if import_thread.is_alive():
+                                            logger.error("❌ Import timed out after 60 seconds")
+                                            raise TimeoutError("whatsapp_agent import timed out")
+                                        
+                                        if not exception_queue.empty():
+                                            raise exception_queue.get()
+                                        
+                                        if result_queue.empty():
+                                            raise RuntimeError("Import completed but no result")
+                                        
+                                        whatsapp_agent = result_queue.get()
                                         logger.info("✅ whatsapp_agent imported successfully")
+                                        
+                                    except TimeoutError:
+                                        logger.error("❌ Import timed out - dense retrieval initialization taking too long")
+                                        send_whatsapp_message(from_number, "I'm initializing. Please try again in a moment.", message_id)
+                                        return
                                     except Exception as import_error:
                                         logger.error(f"❌ Failed to import whatsapp_agent: {import_error}", exc_info=True)
                                         import traceback
