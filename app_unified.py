@@ -7,8 +7,7 @@ import logging
 import re 
 import time
 from datetime import datetime
-from threading import Thread, Lock
-import threading 
+from threading import Thread 
 from queue import Queue 
 from functools import wraps 
 from flask_limiter import Limiter 
@@ -674,15 +673,15 @@ def start_background_tasks():
     task_thread.start()
 
 # Global agent instance (set after preload)
+# Python's import system is thread-safe, so we don't need a lock
 _agent_instance = None
-_agent_lock = threading.Lock()
 
 def get_agent():
     """Get the agent instance, loading it if necessary."""
     global _agent_instance
     import time
     
-    # Fast path: return cached instance immediately (no lock needed for read)
+    # Fast path: return cached instance immediately
     if _agent_instance is not None:
         logger.info("✅ Using cached whatsapp_agent")
         return _agent_instance
@@ -691,29 +690,27 @@ def get_agent():
     logger.info("📦 Loading whatsapp_agent (first use or cache miss)...")
     start_time = time.time()
     
-    # Use lock only during loading to prevent race conditions
-    with _agent_lock:
-        # Double-check after acquiring lock (another thread might have loaded it)
-        if _agent_instance is not None:
-            elapsed = time.time() - start_time
-            logger.info(f"✅ Another thread loaded it, using cached instance (waited {elapsed:.2f}s)")
-            return _agent_instance
-        
-        try:
-            logger.info("🔄 Starting import of langchain_agent...")
-            # Import happens here - this is where it might hang
-            from langchain_agent import whatsapp_agent
-            logger.info("✅ Import completed, caching instance...")
-            _agent_instance = whatsapp_agent
-            elapsed = time.time() - start_time
-            logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
-            return _agent_instance
-        except Exception as e:
-            elapsed = time.time() - start_time
-            logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
-            import traceback
-            logger.error(f"Full traceback: {traceback.format_exc()}")
-            raise
+    # Double-check pattern (no lock needed - Python's import is thread-safe)
+    if _agent_instance is not None:
+        elapsed = time.time() - start_time
+        logger.info(f"✅ Another thread loaded it, using cached instance (waited {elapsed:.2f}s)")
+        return _agent_instance
+    
+    try:
+        logger.info("🔄 Starting import of langchain_agent...")
+        # Import happens here - Python's import lock handles thread safety
+        from langchain_agent import whatsapp_agent
+        logger.info("✅ Import completed, caching instance...")
+        _agent_instance = whatsapp_agent
+        elapsed = time.time() - start_time
+        logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
+        return _agent_instance
+    except Exception as e:
+        elapsed = time.time() - start_time
+        logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
+        import traceback
+        logger.error(f"Full traceback: {traceback.format_exc()}")
+        raise
 
 # Pre-initialize whatsapp_agent in background to avoid first-message delay
 def preload_agent():
