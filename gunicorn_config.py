@@ -19,8 +19,14 @@ def post_fork(server, worker):
     app_unified._worker_thread_started = False
     app_unified.ensure_worker_thread()
     
-    # Pre-load agent in this worker process
-    logger.info(f"🔄 Pre-loading agent in worker {worker.pid}...")
-    app_unified.preload_agent()
+    # Pre-load agent in this worker process (synchronously to ensure it's ready)
+    logger.info(f"🔄 Pre-loading agent in worker {worker.pid} (synchronous)...")
+    try:
+        # Force load the agent in this worker process
+        agent = app_unified.get_agent()
+        logger.info(f"✅ Agent pre-loaded in worker {worker.pid}")
+    except Exception as e:
+        logger.error(f"❌ Failed to pre-load agent in worker {worker.pid}: {e}")
+        # Continue anyway - will load on first message
     
     logger.info(f"✅ Worker thread started in worker {worker.pid}")
