@@ -282,6 +282,8 @@ def handle_webhook():
                                     # Get agent (uses cached instance if pre-loaded)
                                     logger.info("📦 Getting whatsapp_agent...")
                                     import time
+                                    import sys
+                                    sys.stdout.flush()  # Force flush before calling get_agent
                                     agent_start = time.time()
                                     try:
                                         whatsapp_agent = get_agent()
@@ -686,18 +688,52 @@ def get_agent():
     """Get the agent instance, loading it if necessary."""
     global _agent_instance
     import time
+    import threading
+    import sys
+    
+    thread_name = threading.current_thread().name
+    logger.info(f"🔍 get_agent() called from thread: {thread_name}")
+    sys.stdout.flush()  # Force flush to ensure log is visible
     
     # Fast path: return cached instance immediately
     if _agent_instance is not None:
         logger.info("✅ Using cached whatsapp_agent")
         return _agent_instance
     
+    # Check if module is already being imported by another thread
+    import sys
+    import importlib
+    if 'langchain_agent' in sys.modules:
+        module = sys.modules['langchain_agent']
+        if hasattr(module, 'whatsapp_agent'):
+            logger.info("✅ Module already imported, getting agent directly...")
+            agent = module.whatsapp_agent
+            _agent_instance = agent
+            logger.info("✅ Agent retrieved from already-imported module")
+            return _agent_instance
+    
+    logger.info(f"🔒 Thread {thread_name}: Attempting to acquire lock for agent initialization...")
+    lock_start = time.time()
+    
     # Slow path: need to load - use lock to prevent concurrent initialization
     with _agent_lock:
+        lock_elapsed = time.time() - lock_start
+        logger.info(f"✅ Thread {thread_name}: Lock acquired after {lock_elapsed:.2f}s")
+        
         # Double-check pattern after acquiring lock
         if _agent_instance is not None:
             logger.info("✅ Another thread loaded it, using cached instance")
             return _agent_instance
+        
+        # Check again if module was imported while waiting for lock
+        if 'langchain_agent' in sys.modules:
+            module = sys.modules['langchain_agent']
+            if hasattr(module, 'whatsapp_agent'):
+                logger.info("✅ Module was imported by another thread while waiting, using it...")
+                agent = module.whatsapp_agent
+                _agent_instance = agent
+                logger.info("✅ Agent retrieved from module imported by another thread")
+                return _agent_instance
         
         logger.info("📦 Loading whatsapp_agent (first use or cache miss)...")
         start_time = time.time()
@@ -706,11 +742,13 @@ def get_agent():
             logger.info("🔄 Starting import of langchain_agent...")
             # Use importlib to import the module
             # Python's import system is thread-safe and will handle concurrent imports
-            import importlib
+            # If another thread is importing, this will wait for it to complete
             
             logger.info("⏳ Importing module (this may take 40-60 seconds on first load)...")
+            import_start = time.time()
             langchain_agent_module = importlib.import_module('langchain_agent')
-            logger.info("✅ Module imported successfully")
+            import_elapsed = time.time() - import_start
+            logger.info(f"✅ Module imported successfully in {import_elapsed:.2f}s")
             
             # Access whatsapp_agent - this is an AgentProxy that initializes lazily
             if not hasattr(langchain_agent_module, 'whatsapp_agent'):
