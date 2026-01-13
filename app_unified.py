@@ -705,15 +705,34 @@ def get_agent():
         # Check if already imported
         if 'langchain_agent' in sys.modules:
             logger.info("✅ Module already in sys.modules, reusing...")
-            langchain_agent = sys.modules['langchain_agent']
+            langchain_agent_module = sys.modules['langchain_agent']
         else:
             logger.info("📦 Importing fresh module...")
-            langchain_agent = importlib.import_module('langchain_agent')
+            langchain_agent_module = importlib.import_module('langchain_agent')
             logger.info("✅ Module imported successfully")
         
         logger.info("✅ Module imported, getting agent instance...")
-        # Access whatsapp_agent to trigger lazy initialization if needed
-        agent = langchain_agent.whatsapp_agent
+        
+        # Wait for module to be fully initialized (handle circular import)
+        max_retries = 10
+        retry_delay = 0.1
+        agent = None
+        for attempt in range(max_retries):
+            try:
+                if hasattr(langchain_agent_module, 'whatsapp_agent'):
+                    agent = langchain_agent_module.whatsapp_agent
+                    logger.info(f"✅ Agent proxy retrieved on attempt {attempt + 1}")
+                    break
+                else:
+                    logger.info(f"⏳ Waiting for module to initialize (attempt {attempt + 1}/{max_retries})...")
+                    time.sleep(retry_delay)
+            except AttributeError:
+                logger.info(f"⏳ Module not ready yet (attempt {attempt + 1}/{max_retries})...")
+                time.sleep(retry_delay)
+        
+        if agent is None:
+            raise AttributeError("whatsapp_agent not found in langchain_agent module after retries")
+        
         logger.info("✅ Agent proxy retrieved, caching...")
         _agent_instance = agent
         elapsed = time.time() - start_time
