@@ -7,7 +7,8 @@ import logging
 import re 
 import time
 from datetime import datetime
-from threading import Thread 
+from threading import Thread
+import threading 
 from queue import Queue 
 from functools import wraps 
 from flask_limiter import Limiter 
@@ -678,8 +679,8 @@ def start_background_tasks():
     task_thread.start()
 
 # Global agent instance (set after preload)
-# Python's import system is thread-safe, so we don't need a lock
 _agent_instance = None
+_agent_lock = threading.Lock()  # Initialize lock at module level
 
 def get_agent():
     """Get the agent instance, loading it if necessary."""
@@ -691,72 +692,42 @@ def get_agent():
         logger.info("✅ Using cached whatsapp_agent")
         return _agent_instance
     
-    # Slow path: need to load
-    logger.info("📦 Loading whatsapp_agent (first use or cache miss)...")
-    start_time = time.time()
-    
-    # Double-check pattern (no lock needed - Python's import is thread-safe)
-    if _agent_instance is not None:
-        elapsed = time.time() - start_time
-        logger.info(f"✅ Another thread loaded it, using cached instance (waited {elapsed:.2f}s)")
-        return _agent_instance
-    
-    try:
-        logger.info("🔄 Starting import of langchain_agent...")
-        # Use importlib to have more control
-        import importlib
-        import sys
+    # Slow path: need to load - use lock to prevent concurrent initialization
+    with _agent_lock:
+        # Double-check pattern after acquiring lock
+        if _agent_instance is not None:
+            logger.info("✅ Another thread loaded it, using cached instance")
+            return _agent_instance
         
-        # Check if module is already imported
-        if 'langchain_agent' in sys.modules:
-            module = sys.modules['langchain_agent']
-            # Check if module is fully initialized by checking for whatsapp_agent
-            if hasattr(module, 'whatsapp_agent'):
-                logger.info("✅ Module already fully initialized in sys.modules, reusing...")
-                langchain_agent_module = module
-            else:
-                # Module is partially initialized - wait for it to complete
-                logger.info("⚠️ Module in sys.modules but not fully initialized, waiting for completion...")
-                max_wait = 120  # Wait up to 2 minutes
-                wait_interval = 0.5
-                waited = 0
-                while waited < max_wait:
-                    if hasattr(module, 'whatsapp_agent'):
-                        logger.info(f"✅ Module completed initialization after {waited:.1f}s")
-                        langchain_agent_module = module
-                        break
-                    time.sleep(wait_interval)
-                    waited += wait_interval
-                    if waited % 10 == 0:  # Log every 10 seconds
-                        logger.info(f"⏳ Still waiting for module initialization... ({waited:.0f}s)")
-                else:
-                    # Still not initialized after waiting
-                    logger.error("❌ Module did not complete initialization after waiting")
-                    raise RuntimeError("langchain_agent module did not complete initialization")
-        else:
-            logger.info("📦 Importing fresh module...")
-            logger.info("⏳ Starting import (this may take 40-60 seconds)...")
+        logger.info("📦 Loading whatsapp_agent (first use or cache miss)...")
+        start_time = time.time()
+        
+        try:
+            logger.info("🔄 Starting import of langchain_agent...")
+            # Use importlib to import the module
+            # Python's import system is thread-safe and will handle concurrent imports
+            import importlib
+            
+            logger.info("⏳ Importing module (this may take 40-60 seconds on first load)...")
             langchain_agent_module = importlib.import_module('langchain_agent')
             logger.info("✅ Module imported successfully")
-        
-        logger.info("✅ Module imported, getting agent instance...")
-        
-        # Access whatsapp_agent - should be available now
-        if not hasattr(langchain_agent_module, 'whatsapp_agent'):
-            raise AttributeError("whatsapp_agent not found in langchain_agent module after import")
-        
-        agent = langchain_agent_module.whatsapp_agent
-        logger.info("✅ Agent proxy retrieved, caching...")
-        _agent_instance = agent
-        elapsed = time.time() - start_time
-        logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
-        return _agent_instance
-    except Exception as e:
-        elapsed = time.time() - start_time
-        logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise
+            
+            # Access whatsapp_agent - this is an AgentProxy that initializes lazily
+            if not hasattr(langchain_agent_module, 'whatsapp_agent'):
+                raise AttributeError("whatsapp_agent not found in langchain_agent module after import")
+            
+            agent = langchain_agent_module.whatsapp_agent
+            logger.info("✅ Agent proxy retrieved, caching...")
+            _agent_instance = agent
+            elapsed = time.time() - start_time
+            logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
+            return _agent_instance
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise
 
 # Pre-initialize whatsapp_agent in background to avoid first-message delay
 def preload_agent():
