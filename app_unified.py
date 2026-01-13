@@ -704,20 +704,69 @@ def get_agent():
     # Multiple threads can import simultaneously, Python will handle it
     import importlib
     
-    logger.info("🔄 Starting import of langchain_agent (outside lock)...")
-    logger.info("⏳ Importing module (this may take 40-60 seconds on first load)...")
-    import_start = time.time()
-    
-    try:
-        # This import is thread-safe - if another thread is importing, Python will wait
-        # and return the same module object once import completes
-        langchain_agent_module = importlib.import_module('langchain_agent')
-        import_elapsed = time.time() - import_start
-        logger.info(f"✅ Module imported successfully in {import_elapsed:.2f}s")
-    except Exception as import_error:
-        import_elapsed = time.time() - import_start
-        logger.error(f"❌ Failed to import module after {import_elapsed:.2f}s: {import_error}", exc_info=True)
-        raise
+    # Check if module is already in sys.modules (imported or being imported)
+    if 'langchain_agent' in sys.modules:
+        logger.info("✅ Module already in sys.modules, reusing...")
+        langchain_agent_module = sys.modules['langchain_agent']
+        if hasattr(langchain_agent_module, 'whatsapp_agent'):
+            logger.info("✅ Module already fully imported with whatsapp_agent")
+        else:
+            logger.info("⚠️ Module in sys.modules but whatsapp_agent not yet available, waiting...")
+            # Module is being imported by another thread, wait for it
+            max_wait = 180  # 3 minutes max wait
+            wait_start = time.time()
+            while time.time() - wait_start < max_wait:
+                if hasattr(langchain_agent_module, 'whatsapp_agent'):
+                    logger.info("✅ Module completed import, whatsapp_agent now available")
+                    break
+                time.sleep(0.5)
+            else:
+                raise RuntimeError("Module import did not complete within timeout")
+    else:
+        logger.info("🔄 Starting import of langchain_agent (outside lock)...")
+        logger.info("⏳ Importing module (this may take 1-2 minutes on first load due to heavy dependencies)...")
+        import_start = time.time()
+        sys.stdout.flush()
+        
+        try:
+            # Log before starting import
+            logger.info("📦 About to call importlib.import_module('langchain_agent')...")
+            logger.info("⚠️ This import may be slow - loading HuggingFace embeddings, FAISS, LangChain, etc.")
+            sys.stdout.flush()
+            
+            # This import is thread-safe - if another thread is importing, Python will wait
+            # and return the same module object once import completes
+            # The import might be slow due to heavy dependencies:
+            # - HuggingFace embeddings (may download models on first use)
+            # - FAISS vectorstore
+            # - LangChain libraries
+            # - Google Sheets client
+            
+            langchain_agent_module = importlib.import_module('langchain_agent')
+            
+            import_elapsed = time.time() - import_start
+            logger.info(f"✅ Module imported successfully in {import_elapsed:.2f}s")
+            sys.stdout.flush()
+            
+            # Verify the module has what we need
+            if not hasattr(langchain_agent_module, 'whatsapp_agent'):
+                raise AttributeError("langchain_agent module imported but 'whatsapp_agent' not found")
+            logger.info("✅ Verified whatsapp_agent exists in imported module")
+            
+        except ImportError as import_error:
+            import_elapsed = time.time() - import_start
+            logger.error(f"❌ ImportError after {import_elapsed:.2f}s: {import_error}", exc_info=True)
+            logger.error(f"Import error details: {str(import_error)}")
+            logger.error("This might be due to missing dependencies. Check requirements.txt")
+            sys.stdout.flush()
+            raise
+        except Exception as import_error:
+            import_elapsed = time.time() - import_start
+            logger.error(f"❌ Failed to import module after {import_elapsed:.2f}s: {import_error}", exc_info=True)
+            import traceback
+            logger.error(f"Full import traceback: {traceback.format_exc()}")
+            sys.stdout.flush()
+            raise
     
     # Now acquire lock only to set the cached instance (fast operation)
     logger.info(f"🔒 Thread {thread_name}: Acquiring lock to cache agent instance...")
