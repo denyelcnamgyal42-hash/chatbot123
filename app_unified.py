@@ -682,7 +682,7 @@ def get_agent():
     global _agent_instance
     import time
     
-    # Fast path: return cached instance immediately
+    # Fast path: return cached instance immediately (no lock needed for read)
     if _agent_instance is not None:
         logger.info("✅ Using cached whatsapp_agent")
         return _agent_instance
@@ -691,39 +691,29 @@ def get_agent():
     logger.info("📦 Loading whatsapp_agent (first use or cache miss)...")
     start_time = time.time()
     
-    # Try to acquire lock with timeout to avoid deadlock
-    lock_acquired = False
-    try:
-        # Try to acquire lock, but don't wait forever
-        lock_acquired = _agent_lock.acquire(timeout=5.0)
-        if not lock_acquired:
-            logger.warning("⚠️ Could not acquire lock within 5s, trying import anyway...")
-    except Exception as lock_error:
-        logger.warning(f"⚠️ Lock acquisition error: {lock_error}, trying import anyway...")
-    
-    try:
-        # Double-check after attempting to acquire lock
+    # Use lock only during loading to prevent race conditions
+    with _agent_lock:
+        # Double-check after acquiring lock (another thread might have loaded it)
         if _agent_instance is not None:
             elapsed = time.time() - start_time
             logger.info(f"✅ Another thread loaded it, using cached instance (waited {elapsed:.2f}s)")
             return _agent_instance
         
-        logger.info("🔄 Starting import of langchain_agent...")
-        from langchain_agent import whatsapp_agent
-        logger.info("✅ Import completed, caching instance...")
-        _agent_instance = whatsapp_agent
-        elapsed = time.time() - start_time
-        logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
-        return _agent_instance
-    except Exception as e:
-        elapsed = time.time() - start_time
-        logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
-        import traceback
-        logger.error(f"Full traceback: {traceback.format_exc()}")
-        raise
-    finally:
-        if lock_acquired:
-            _agent_lock.release()
+        try:
+            logger.info("🔄 Starting import of langchain_agent...")
+            # Import happens here - this is where it might hang
+            from langchain_agent import whatsapp_agent
+            logger.info("✅ Import completed, caching instance...")
+            _agent_instance = whatsapp_agent
+            elapsed = time.time() - start_time
+            logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
+            return _agent_instance
+        except Exception as e:
+            elapsed = time.time() - start_time
+            logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
+            import traceback
+            logger.error(f"Full traceback: {traceback.format_exc()}")
+            raise
 
 # Pre-initialize whatsapp_agent in background to avoid first-message delay
 def preload_agent():
