@@ -24,7 +24,8 @@ except ImportError:
 from typing import Dict, List, Optional, Tuple, Any
 import config
 from google_sheets import sheets_manager  # FIXED
-from dense_retrieval import get_dense_retrieval  # FIXED - now it exists
+# Lazy import - don't import dense_retrieval at module level to avoid blocking
+# from dense_retrieval import get_dense_retrieval  # Moved to lazy import
 from session_manager import session_manager
 from datetime import datetime, timedelta
 import json
@@ -40,6 +41,8 @@ def get_dense_retriever():
     global _dense_retriever_instance
     if _dense_retriever_instance is None:
         print("🔄 Initializing dense retriever (first use)...")
+        # Lazy import to avoid blocking module import
+        from dense_retrieval import get_dense_retrieval
         _dense_retriever_instance = get_dense_retrieval()
         print("✅ Dense retriever initialized")
     return _dense_retriever_instance
