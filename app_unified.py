@@ -279,11 +279,15 @@ def handle_webhook():
                                     
                                     # Import whatsapp_agent (should be pre-loaded, but import anyway)
                                     logger.info("📦 Importing whatsapp_agent...")
+                                    import time
+                                    import_start = time.time()
                                     try:
                                         from langchain_agent import whatsapp_agent
-                                        logger.info("✅ whatsapp_agent imported successfully")
+                                        import_elapsed = time.time() - import_start
+                                        logger.info(f"✅ whatsapp_agent imported successfully in {import_elapsed:.2f}s")
                                     except Exception as import_error:
-                                        logger.error(f"❌ Failed to import whatsapp_agent: {import_error}", exc_info=True)
+                                        import_elapsed = time.time() - import_start
+                                        logger.error(f"❌ Failed to import whatsapp_agent after {import_elapsed:.2f}s: {import_error}", exc_info=True)
                                         import traceback
                                         logger.error(f"Import traceback: {traceback.format_exc()}")
                                         raise

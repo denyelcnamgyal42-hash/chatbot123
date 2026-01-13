@@ -32,8 +32,17 @@ import re
 import time
 import traceback
 
-# Initialize retrievers immediately
-dense_retriever = get_dense_retrieval()  # FIXED - initialize here
+# Lazy initialization - only load when first used
+_dense_retriever_instance = None
+
+def get_dense_retriever():
+    """Get dense retriever instance (lazy initialization)."""
+    global _dense_retriever_instance
+    if _dense_retriever_instance is None:
+        print("🔄 Initializing dense retriever (first use)...")
+        _dense_retriever_instance = get_dense_retrieval()
+        print("✅ Dense retriever initialized")
+    return _dense_retriever_instance
 
 class UniversalAgent:
     """Universal agent for any Google Sheets data."""
@@ -105,7 +114,7 @@ class UniversalAgent:
                     check_out_raw = None
                 
                 # Use hotel search - only searches hotel/room sheets
-                results = dense_retriever.search_hotels(query, k=20)  # Get more results to filter
+                results = get_dense_retriever().search_hotels(query, k=20)  # Get more results to filter
                 
                 if not results:
                     return "❌ No rooms found matching your search. Please try different dates or room types."
@@ -503,7 +512,7 @@ class UniversalAgent:
                             return f"❌ Could not parse check-out date: {check_out_str}. Please provide date as '22nd January' or YYYY-MM-DD format."
                 
                 # Search for the room type
-                search_results = dense_retriever.search_hotels(room_type, k=10)  # Show more rooms
+                search_results = get_dense_retriever().search_hotels(room_type, k=10)  # Show more rooms
                 
                 if not search_results:
                     return f"❌ Room type '{room_type}' not found. Please search for available rooms first."
