@@ -19,20 +19,27 @@ def post_fork(server, worker):
     app_unified._worker_thread_started = False
     app_unified.ensure_worker_thread()
     
-    # Pre-load agent in this worker process (synchronously to ensure it's ready)
-    logger.info(f"🔄 Pre-loading agent in worker {worker.pid} (synchronous)...")
+    # Pre-load agent in this worker process (in background thread to avoid blocking)
+    logger.info(f"🔄 Pre-loading agent in worker {worker.pid} (background)...")
+    from threading import Thread
     import time
-    preload_start = time.time()
-    try:
-        # Force load the agent in this worker process
-        agent = app_unified.get_agent()
-        preload_elapsed = time.time() - preload_start
-        logger.info(f"✅ Agent pre-loaded in worker {worker.pid} in {preload_elapsed:.2f}s")
-    except Exception as e:
-        preload_elapsed = time.time() - preload_start
-        logger.error(f"❌ Failed to pre-load agent in worker {worker.pid} after {preload_elapsed:.2f}s: {e}", exc_info=True)
-        import traceback
-        logger.error(f"Preload traceback: {traceback.format_exc()}")
-        # Continue anyway - will load on first message
     
-    logger.info(f"✅ Worker thread started in worker {worker.pid}")
+    def preload_in_background():
+        preload_start = time.time()
+        try:
+            logger.info(f"🔄 Background preload started in worker {worker.pid}...")
+            # Force load the agent in this worker process
+            agent = app_unified.get_agent()
+            preload_elapsed = time.time() - preload_start
+            logger.info(f"✅ Agent pre-loaded in worker {worker.pid} in {preload_elapsed:.2f}s")
+        except Exception as e:
+            preload_elapsed = time.time() - preload_start
+            logger.error(f"❌ Failed to pre-load agent in worker {worker.pid} after {preload_elapsed:.2f}s: {e}", exc_info=True)
+            import traceback
+            logger.error(f"Preload traceback: {traceback.format_exc()}")
+    
+    # Start preload in background thread so worker can accept requests
+    preload_thread = Thread(target=preload_in_background, daemon=True)
+    preload_thread.start()
+    
+    logger.info(f"✅ Worker thread started in worker {worker.pid} (agent preloading in background)")
