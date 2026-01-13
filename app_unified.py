@@ -177,10 +177,10 @@ def process_message_async():
 # Function to start worker thread (called on first request or app init)
 def ensure_worker_thread():
     """Ensure the message processing worker thread is running."""
-    global _worker_thread_started
+    global _worker_thread_started, _worker_thread
     if not _worker_thread_started:
-        worker_thread = Thread(target=process_message_async, daemon=True)
-        worker_thread.start()
+        _worker_thread = Thread(target=process_message_async, daemon=True)
+        _worker_thread.start()
         _worker_thread_started = True
         logger.info("✅ Message processing worker thread initialized and started")
 
