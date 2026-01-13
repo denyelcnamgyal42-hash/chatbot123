@@ -7,7 +7,8 @@ import logging
 import re 
 import time
 from datetime import datetime
-from threading import Thread 
+from threading import Thread, Lock
+import threading 
 from queue import Queue 
 from functools import wraps 
 from flask_limiter import Limiter 
@@ -143,10 +144,10 @@ def process_message_async():
             logger.info(f"📨 Processing async message from {phone}: {text[:50]}")
             
             try:
-                # Lazy import to avoid blocking app startup
-                logger.info("🔄 Importing whatsapp_agent...")
-                from langchain_agent import whatsapp_agent
-                logger.info("✅ whatsapp_agent imported successfully")
+                # Get agent (uses cached instance if pre-loaded)
+                logger.info("🔄 Getting whatsapp_agent...")
+                whatsapp_agent = get_agent()
+                logger.info("✅ whatsapp_agent retrieved successfully")
                 
                 # Process with agent
                 logger.info(f"🤖 Processing message with agent: {text[:50]}...")
@@ -277,19 +278,19 @@ def handle_webhook():
                                     logger.info(f"🔄 Processing message from {from_number} in background thread")
                                     logger.info(f"📝 Message text: {message_text}")
                                     
-                                    # Import whatsapp_agent (should be pre-loaded, but import anyway)
-                                    logger.info("📦 Importing whatsapp_agent...")
+                                    # Get agent (uses cached instance if pre-loaded)
+                                    logger.info("📦 Getting whatsapp_agent...")
                                     import time
-                                    import_start = time.time()
+                                    agent_start = time.time()
                                     try:
-                                        from langchain_agent import whatsapp_agent
-                                        import_elapsed = time.time() - import_start
-                                        logger.info(f"✅ whatsapp_agent imported successfully in {import_elapsed:.2f}s")
-                                    except Exception as import_error:
-                                        import_elapsed = time.time() - import_start
-                                        logger.error(f"❌ Failed to import whatsapp_agent after {import_elapsed:.2f}s: {import_error}", exc_info=True)
+                                        whatsapp_agent = get_agent()
+                                        agent_elapsed = time.time() - agent_start
+                                        logger.info(f"✅ whatsapp_agent retrieved in {agent_elapsed:.2f}s")
+                                    except Exception as agent_error:
+                                        agent_elapsed = time.time() - agent_start
+                                        logger.error(f"❌ Failed to get agent after {agent_elapsed:.2f}s: {agent_error}", exc_info=True)
                                         import traceback
-                                        logger.error(f"Import traceback: {traceback.format_exc()}")
+                                        logger.error(f"Agent retrieval traceback: {traceback.format_exc()}")
                                         raise
                                     
                                     # Process with agent
@@ -672,6 +673,25 @@ def start_background_tasks():
     task_thread = Thread(target=_start_tasks, daemon=True)
     task_thread.start()
 
+# Global agent instance (set after preload)
+_agent_instance = None
+_agent_lock = threading.Lock()
+
+def get_agent():
+    """Get the agent instance, loading it if necessary."""
+    global _agent_instance
+    if _agent_instance is None:
+        with _agent_lock:
+            if _agent_instance is None:  # Double-check
+                logger.info("📦 Loading whatsapp_agent (first use)...")
+                import time
+                start_time = time.time()
+                from langchain_agent import whatsapp_agent
+                _agent_instance = whatsapp_agent
+                elapsed = time.time() - start_time
+                logger.info(f"✅ whatsapp_agent loaded in {elapsed:.2f}s")
+    return _agent_instance
+
 # Pre-initialize whatsapp_agent in background to avoid first-message delay
 def preload_agent():
     """Pre-load the agent in background so it's ready when messages arrive."""
@@ -680,7 +700,8 @@ def preload_agent():
             logger.info("🔄 Pre-loading whatsapp_agent in background...")
             import time
             start_time = time.time()
-            from langchain_agent import whatsapp_agent
+            # Pre-load by calling get_agent
+            agent = get_agent()
             elapsed = time.time() - start_time
             logger.info(f"✅ whatsapp_agent pre-loaded successfully in {elapsed:.2f}s")
         except Exception as e:
