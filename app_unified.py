@@ -698,8 +698,19 @@ def get_agent():
     
     try:
         logger.info("🔄 Starting import of langchain_agent...")
-        # Import happens here - Python's import lock handles thread safety
-        import langchain_agent
+        # Use importlib to have more control
+        import importlib
+        import sys
+        
+        # Check if already imported
+        if 'langchain_agent' in sys.modules:
+            logger.info("✅ Module already in sys.modules, reusing...")
+            langchain_agent = sys.modules['langchain_agent']
+        else:
+            logger.info("📦 Importing fresh module...")
+            langchain_agent = importlib.import_module('langchain_agent')
+            logger.info("✅ Module imported successfully")
+        
         logger.info("✅ Module imported, getting agent instance...")
         # Access whatsapp_agent to trigger lazy initialization if needed
         agent = langchain_agent.whatsapp_agent
