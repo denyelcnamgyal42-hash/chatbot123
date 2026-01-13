@@ -678,10 +678,15 @@ def preload_agent():
     def _preload():
         try:
             logger.info("🔄 Pre-loading whatsapp_agent in background...")
+            import time
+            start_time = time.time()
             from langchain_agent import whatsapp_agent
-            logger.info("✅ whatsapp_agent pre-loaded successfully")
+            elapsed = time.time() - start_time
+            logger.info(f"✅ whatsapp_agent pre-loaded successfully in {elapsed:.2f}s")
         except Exception as e:
-            logger.warning(f"⚠️ Failed to pre-load agent: {e} - will load on first message")
+            logger.error(f"❌ Failed to pre-load agent: {e}", exc_info=True)
+            import traceback
+            logger.error(f"Preload traceback: {traceback.format_exc()}")
     
     preload_thread = Thread(target=_preload, daemon=True)
     preload_thread.start()
