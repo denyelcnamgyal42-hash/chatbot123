@@ -26,6 +26,7 @@ CORS(app)
 
 # Global variable to track if worker thread is started
 _worker_thread_started = False
+_worker_thread = None
 
 # Rate limiting
 limiter = Limiter(
@@ -649,8 +650,12 @@ def reindex_vectorstore():
 def cleanup():
     """Cleanup function for graceful shutdown."""
     logger.info("Shutting down...")
-    message_queue.put(None)
-    worker_thread.join(timeout=5)
+    try:
+        message_queue.put(None)
+        if _worker_thread is not None and _worker_thread.is_alive():
+            _worker_thread.join(timeout=5)
+    except Exception as e:
+        logger.warning(f"Error during cleanup: {e}")
 
 import atexit
 atexit.register(cleanup)
