@@ -707,7 +707,7 @@ def get_agent():
         import importlib
         import sys
         
-        # If module is partially initialized (circular import), remove it and reimport
+        # Check if module is already imported
         if 'langchain_agent' in sys.modules:
             module = sys.modules['langchain_agent']
             # Check if module is fully initialized by checking for whatsapp_agent
@@ -715,18 +715,26 @@ def get_agent():
                 logger.info("✅ Module already fully initialized in sys.modules, reusing...")
                 langchain_agent_module = module
             else:
-                logger.info("⚠️ Module in sys.modules but not fully initialized (circular import), forcing fresh import...")
-                # Remove from sys.modules to force fresh import
-                del sys.modules['langchain_agent']
-                logger.info("🔄 Removed from sys.modules, importing fresh...")
-                # Direct import - timeout doesn't work with Python's import lock
-                # If this hangs, the post_fork hook should have pre-loaded it
-                logger.info("⏳ Starting import (this may take 40-60 seconds)...")
-                langchain_agent_module = importlib.import_module('langchain_agent')
-                logger.info("✅ Fresh module imported successfully")
+                # Module is partially initialized - wait for it to complete
+                logger.info("⚠️ Module in sys.modules but not fully initialized, waiting for completion...")
+                max_wait = 120  # Wait up to 2 minutes
+                wait_interval = 0.5
+                waited = 0
+                while waited < max_wait:
+                    if hasattr(module, 'whatsapp_agent'):
+                        logger.info(f"✅ Module completed initialization after {waited:.1f}s")
+                        langchain_agent_module = module
+                        break
+                    time.sleep(wait_interval)
+                    waited += wait_interval
+                    if waited % 10 == 0:  # Log every 10 seconds
+                        logger.info(f"⏳ Still waiting for module initialization... ({waited:.0f}s)")
+                else:
+                    # Still not initialized after waiting
+                    logger.error("❌ Module did not complete initialization after waiting")
+                    raise RuntimeError("langchain_agent module did not complete initialization")
         else:
             logger.info("📦 Importing fresh module...")
-            # Direct import - if this hangs, the post_fork hook should have pre-loaded it
             logger.info("⏳ Starting import (this may take 40-60 seconds)...")
             langchain_agent_module = importlib.import_module('langchain_agent')
             logger.info("✅ Module imported successfully")
