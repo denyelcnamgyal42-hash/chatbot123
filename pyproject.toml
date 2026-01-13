@@ -9,6 +9,7 @@ dependencies = [
     "dataclasses-json>=0.6.7",
     "faiss-cpu>=1.7,<2.0",
     "flask>=2.3,<4.0",
+    "flask-cors>=6.0.2",
     "flask-limiter>=3.5",
     "google-auth>=2.25.2",
     "google-auth-httplib2>=0.2.0",

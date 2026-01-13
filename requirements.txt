@@ -28,3 +28,4 @@ pandas>=2.1.4
 schedule
 cachetools
 dataclasses-json>=0.6.7
+flask_cors
