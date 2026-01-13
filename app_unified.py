@@ -696,18 +696,18 @@ def get_agent():
         logger.info(f"✅ Another thread loaded it, using cached instance (waited {elapsed:.2f}s)")
         return _agent_instance
     
-        try:
-            logger.info("🔄 Starting import of langchain_agent...")
-            # Import happens here - Python's import lock handles thread safety
-            import langchain_agent
-            logger.info("✅ Module imported, getting agent instance...")
-            # Access whatsapp_agent to trigger lazy initialization if needed
-            agent = langchain_agent.whatsapp_agent
-            logger.info("✅ Agent proxy retrieved, caching...")
-            _agent_instance = agent
-            elapsed = time.time() - start_time
-            logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
-            return _agent_instance
+    try:
+        logger.info("🔄 Starting import of langchain_agent...")
+        # Import happens here - Python's import lock handles thread safety
+        import langchain_agent
+        logger.info("✅ Module imported, getting agent instance...")
+        # Access whatsapp_agent to trigger lazy initialization if needed
+        agent = langchain_agent.whatsapp_agent
+        logger.info("✅ Agent proxy retrieved, caching...")
+        _agent_instance = agent
+        elapsed = time.time() - start_time
+        logger.info(f"✅ whatsapp_agent loaded and cached in {elapsed:.2f}s")
+        return _agent_instance
     except Exception as e:
         elapsed = time.time() - start_time
         logger.error(f"❌ Failed to load agent after {elapsed:.2f}s: {e}", exc_info=True)
