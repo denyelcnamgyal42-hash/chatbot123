@@ -726,7 +726,11 @@ def preload_agent():
             # Pre-load by calling get_agent
             agent = get_agent()
             elapsed = time.time() - start_time
-            logger.info(f"✅ whatsapp_agent pre-loaded successfully in {elapsed:.2f}s")
+            # Verify it's cached
+            if _agent_instance is not None:
+                logger.info(f"✅ whatsapp_agent pre-loaded and cached successfully in {elapsed:.2f}s")
+            else:
+                logger.warning(f"⚠️ Preload completed but _agent_instance is None after {elapsed:.2f}s")
         except Exception as e:
             logger.error(f"❌ Failed to pre-load agent: {e}", exc_info=True)
             import traceback
