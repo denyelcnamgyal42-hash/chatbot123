@@ -2129,18 +2129,37 @@ Would you like to confirm this booking? Just reply 'yes' or 'confirm'! 😊"""
             
             return error_msg
 
-# Global instance
-try:
-    universal_agent = UniversalAgent()
-    print("🎉 Universal Agent is ready for ANY data!")
-except Exception as e:
-    print(f"❌ Failed to initialize agent: {e}")
-    traceback.print_exc()
-    # Fallback
-    class FallbackAgent:
-        def process_message(self, message, phone, name=""):
-            return "Hello! I'm your assistant. I can help you search and order anything from our inventory."
-    universal_agent = FallbackAgent()
+# Lazy initialization - only create agent when first accessed
+_agent_instance = None
 
-# For backward compatibility
-whatsapp_agent = universal_agent
+def get_agent():
+    """Get or create the agent instance (lazy initialization)."""
+    global _agent_instance
+    if _agent_instance is None:
+        try:
+            print("🌍 Creating Universal Agent (first use)...")
+            _agent_instance = UniversalAgent()
+            print("🎉 Universal Agent is ready for ANY data!")
+        except Exception as e:
+            print(f"❌ Failed to initialize agent: {e}")
+            traceback.print_exc()
+            # Fallback
+            class FallbackAgent:
+                def process_message(self, message, phone, name=""):
+                    return "Hello! I'm your assistant. I can help you search and order anything from our inventory."
+            _agent_instance = FallbackAgent()
+    return _agent_instance
+
+# For backward compatibility - lazy property
+class LazyAgent:
+    """Lazy wrapper that creates agent on first access."""
+    def __getattr__(self, name):
+        agent = get_agent()
+        return getattr(agent, name)
+    
+    def __call__(self, *args, **kwargs):
+        agent = get_agent()
+        return agent(*args, **kwargs)
+
+whatsapp_agent = LazyAgent()
+universal_agent = whatsapp_agent  # Alias for backward compatibility
