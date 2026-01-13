@@ -2131,35 +2131,46 @@ Would you like to confirm this booking? Just reply 'yes' or 'confirm'! 😊"""
 
 # Lazy initialization - only create agent when first accessed
 _agent_instance = None
+_agent_lock = None  # Will be initialized on first use
+
+def _get_lock():
+    """Get or create the lock (lazy initialization to avoid import issues)."""
+    global _agent_lock
+    if _agent_lock is None:
+        import threading
+        _agent_lock = threading.Lock()
+    return _agent_lock
 
 def get_agent():
     """Get or create the agent instance (lazy initialization)."""
     global _agent_instance
     if _agent_instance is None:
-        try:
-            print("🌍 Creating Universal Agent (first use)...")
-            _agent_instance = UniversalAgent()
-            print("🎉 Universal Agent is ready for ANY data!")
-        except Exception as e:
-            print(f"❌ Failed to initialize agent: {e}")
-            traceback.print_exc()
-            # Fallback
-            class FallbackAgent:
-                def process_message(self, message, phone, name=""):
-                    return "Hello! I'm your assistant. I can help you search and order anything from our inventory."
-            _agent_instance = FallbackAgent()
+        lock = _get_lock()
+        with lock:
+            # Double-check pattern
+            if _agent_instance is None:
+                try:
+                    print("🌍 Creating Universal Agent (first use)...")
+                    _agent_instance = UniversalAgent()
+                    print("🎉 Universal Agent is ready for ANY data!")
+                except Exception as e:
+                    print(f"❌ Failed to initialize agent: {e}")
+                    traceback.print_exc()
+                    # Fallback
+                    class FallbackAgent:
+                        def process_message(self, message, phone, name=""):
+                            return "Hello! I'm your assistant. I can help you search and order anything from our inventory."
+                    _agent_instance = FallbackAgent()
     return _agent_instance
 
-# For backward compatibility - lazy property
-class LazyAgent:
-    """Lazy wrapper that creates agent on first access."""
+# For backward compatibility - create a simple proxy object
+class AgentProxy:
+    """Proxy that lazily creates the agent on first method call."""
     def __getattr__(self, name):
+        # Only access agent when attribute is actually requested
         agent = get_agent()
         return getattr(agent, name)
-    
-    def __call__(self, *args, **kwargs):
-        agent = get_agent()
-        return agent(*args, **kwargs)
 
-whatsapp_agent = LazyAgent()
-universal_agent = whatsapp_agent  # Alias for backward compatibility
+# Create proxy instances - these are just lightweight objects
+whatsapp_agent = AgentProxy()
+universal_agent = AgentProxy()
