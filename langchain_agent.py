@@ -23,8 +23,8 @@ except ImportError:
     from langchain.callbacks import get_openai_callback
 from typing import Dict, List, Optional, Tuple, Any
 import config
-from google_sheets import sheets_manager  # FIXED
-# Lazy import - don't import dense_retrieval at module level to avoid blocking
+# Lazy imports - don't import heavy modules at module level to avoid blocking
+# from google_sheets import sheets_manager  # Moved to lazy import
 # from dense_retrieval import get_dense_retrieval  # Moved to lazy import
 from session_manager import session_manager
 from datetime import datetime, timedelta
@@ -35,6 +35,16 @@ import traceback
 
 # Lazy initialization - only load when first used
 _dense_retriever_instance = None
+_sheets_manager_instance = None
+
+def get_sheets_manager():
+    """Get sheets manager instance (lazy initialization)."""
+    global _sheets_manager_instance
+    if _sheets_manager_instance is None:
+        # Lazy import to avoid blocking module import
+        from google_sheets import sheets_manager
+        _sheets_manager_instance = sheets_manager
+    return _sheets_manager_instance
 
 def get_dense_retriever():
     """Get dense retriever instance (lazy initialization)."""
@@ -131,7 +141,7 @@ class UniversalAgent:
                     sheet_name = item.get('sheet_name', '')
                     
                     # Dynamically extract key info using sheet structure
-                    structure = sheets_manager.get_sheet_structure(sheet_name)
+                    structure = get_sheets_manager().get_sheet_structure(sheet_name)
                     name_col = structure.get('name_column')
                     price_col = structure.get('price_column')
                     room_id_col = None
@@ -177,7 +187,7 @@ class UniversalAgent:
                     # Check availability if dates are provided
                     is_available = True
                     if check_in_raw and check_out_raw and room_id:
-                        is_available, availability_msg = sheets_manager.check_room_availability_from_booked_dates_column(
+                        is_available, availability_msg = get_sheets_manager().check_room_availability_from_booked_dates_column(
                             room_id, check_in_raw, check_out_raw
                         )
                         if not is_available:
@@ -207,7 +217,7 @@ class UniversalAgent:
             """Check status of a booking."""
             try:
                 # Find bookings sheet dynamically
-                all_sheets = sheets_manager.discover_sheets()
+                all_sheets = get_sheets_manager().discover_sheets()
                 bookings_sheet = None
                 for sheet in all_sheets:
                     if 'booking' in sheet.lower():
@@ -218,7 +228,7 @@ class UniversalAgent:
                     bookings_sheet = config.BOOKINGS_SHEET
                 
                 # Read bookings data
-                bookings_data = sheets_manager.read_all_data(bookings_sheet)
+                bookings_data = get_sheets_manager().read_all_data(bookings_sheet)
                 if not bookings_data or len(bookings_data) < 2:
                     return "No bookings found."
                 
@@ -526,7 +536,7 @@ class UniversalAgent:
                 row_data = best_match.get('row_data', {})
                 
                 # Get sheet structure
-                structure = sheets_manager.get_sheet_structure(sheet_name)
+                structure = get_sheets_manager().get_sheet_structure(sheet_name)
                 headers = structure.get('headers', [])
                 
                 # Extract Room ID
@@ -597,11 +607,11 @@ class UniversalAgent:
                     price = price_per_night  # Fallback to price per night
                 
                 # Get pending bookings sheet
-                pending_sheet = sheets_manager._get_or_create_pending_bookings_sheet()
+                pending_sheet = get_sheets_manager()._get_or_create_pending_bookings_sheet()
                 
                 # Check for duplicate bookings before creating
                 try:
-                    bookings_data = sheets_manager.read_all_data(pending_sheet)
+                    bookings_data = get_sheets_manager().read_all_data(pending_sheet)
                     if bookings_data and len(bookings_data) > 1:
                         headers_row = bookings_data[0]
                         try:
@@ -647,7 +657,7 @@ class UniversalAgent:
                 
                 # Check date-based availability if room_id is available
                 if room_id:
-                    is_available, availability_msg = sheets_manager.check_room_availability_by_date(
+                    is_available, availability_msg = get_sheets_manager().check_room_availability_by_date(
                         room_id, check_in, check_out
                     )
                     if not is_available:
@@ -674,7 +684,7 @@ class UniversalAgent:
                 
                 # Check room capacity if room info is available
                 if room_id:
-                    room_info = sheets_manager.get_room_info(room_id)
+                    room_info = get_sheets_manager().get_room_info(room_id)
                     if room_info:
                         # Try to find max guest capacity
                         max_guests = None
@@ -695,7 +705,7 @@ class UniversalAgent:
                                 pass
                 
                 # Create booking
-                booking_id = sheets_manager.create_booking(
+                booking_id = get_sheets_manager().create_booking(
                     customer_name=customer_name,
                     phone=phone,
                     check_in=check_in,
@@ -733,7 +743,7 @@ Our team will contact you at {phone} for confirmation and payment. Thank you for
                             'Villa': 'villa'
                         }
                         search_type = room_type_map.get(room_type, room_type.lower())
-                        available_rooms = sheets_manager.get_available_rooms_by_type(search_type, check_in, check_out)
+                        available_rooms = get_sheets_manager().get_available_rooms_by_type(search_type, check_in, check_out)
                         
                         if available_rooms and len(available_rooms) > 0:
                             # There are other rooms of this type available
