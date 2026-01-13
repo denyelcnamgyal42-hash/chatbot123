@@ -714,20 +714,68 @@ def get_agent():
                 # Remove from sys.modules to force fresh import
                 del sys.modules['langchain_agent']
                 logger.info("🔄 Removed from sys.modules, importing fresh...")
-                try:
-                    langchain_agent_module = importlib.import_module('langchain_agent')
-                    logger.info("✅ Fresh module imported successfully")
-                except Exception as import_err:
-                    logger.error(f"❌ Import failed: {import_err}", exc_info=True)
-                    raise
+                # Use a timeout mechanism to prevent infinite hanging
+                import signal
+                import threading
+                
+                result = [None]
+                exception = [None]
+                
+                def do_import():
+                    try:
+                        result[0] = importlib.import_module('langchain_agent')
+                    except Exception as e:
+                        exception[0] = e
+                
+                import_thread = threading.Thread(target=do_import, daemon=True)
+                import_thread.start()
+                import_thread.join(timeout=60.0)  # 60 second timeout
+                
+                if import_thread.is_alive():
+                    logger.error("❌ Import timed out after 60 seconds")
+                    raise TimeoutError("Import of langchain_agent timed out after 60 seconds")
+                
+                if exception[0]:
+                    logger.error(f"❌ Import failed: {exception[0]}", exc_info=True)
+                    raise exception[0]
+                
+                if result[0] is None:
+                    raise RuntimeError("Import completed but result is None")
+                
+                langchain_agent_module = result[0]
+                logger.info("✅ Fresh module imported successfully")
         else:
             logger.info("📦 Importing fresh module...")
-            try:
-                langchain_agent_module = importlib.import_module('langchain_agent')
-                logger.info("✅ Module imported successfully")
-            except Exception as import_err:
-                logger.error(f"❌ Import failed: {import_err}", exc_info=True)
-                raise
+            # Use a timeout mechanism to prevent infinite hanging
+            import signal
+            import threading
+            
+            result = [None]
+            exception = [None]
+            
+            def do_import():
+                try:
+                    result[0] = importlib.import_module('langchain_agent')
+                except Exception as e:
+                    exception[0] = e
+            
+            import_thread = threading.Thread(target=do_import, daemon=True)
+            import_thread.start()
+            import_thread.join(timeout=60.0)  # 60 second timeout
+            
+            if import_thread.is_alive():
+                logger.error("❌ Import timed out after 60 seconds")
+                raise TimeoutError("Import of langchain_agent timed out after 60 seconds")
+            
+            if exception[0]:
+                logger.error(f"❌ Import failed: {exception[0]}", exc_info=True)
+                raise exception[0]
+            
+            if result[0] is None:
+                raise RuntimeError("Import completed but result is None")
+            
+            langchain_agent_module = result[0]
+            logger.info("✅ Module imported successfully")
         
         logger.info("✅ Module imported, getting agent instance...")
         
