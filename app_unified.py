@@ -712,16 +712,52 @@ def get_agent():
             logger.info("✅ Module already fully imported with whatsapp_agent")
         else:
             logger.info("⚠️ Module in sys.modules but whatsapp_agent not yet available, waiting...")
+            logger.info("⏳ Another thread is importing the module, waiting for completion...")
+            logger.info("💡 This is normal on first load - importing HuggingFace embeddings, FAISS, etc. can take 1-2 minutes")
             # Module is being imported by another thread, wait for it
-            max_wait = 180  # 3 minutes max wait
+            max_wait = 300  # 5 minutes max wait (increased for first-time model downloads)
             wait_start = time.time()
+            last_log_time = wait_start
+            
             while time.time() - wait_start < max_wait:
-                if hasattr(langchain_agent_module, 'whatsapp_agent'):
-                    logger.info("✅ Module completed import, whatsapp_agent now available")
-                    break
+                elapsed = time.time() - wait_start
+                
+                # Log progress every 10 seconds
+                if elapsed >= 10 and (elapsed - (last_log_time - wait_start)) >= 10:
+                    logger.info(f"⏳ Still waiting for module import to complete... ({elapsed:.1f}s elapsed)")
+                    logger.info("   (This is normal - heavy dependencies like HuggingFace embeddings can take time)")
+                    last_log_time = time.time()
+                    sys.stdout.flush()
+                
+                # Check if whatsapp_agent is now available
+                try:
+                    if hasattr(langchain_agent_module, 'whatsapp_agent'):
+                        elapsed = time.time() - wait_start
+                        logger.info(f"✅ Module completed import, whatsapp_agent now available (waited {elapsed:.1f}s)")
+                        break
+                except Exception as check_error:
+                    # Module might be in an inconsistent state, log and continue waiting
+                    if elapsed % 30 < 0.6:  # Log once every 30 seconds
+                        logger.warning(f"⚠️ Error checking module state: {check_error}")
+                    
                 time.sleep(0.5)
             else:
-                raise RuntimeError("Module import did not complete within timeout")
+                elapsed = time.time() - wait_start
+                logger.error(f"❌ Module import did not complete within {max_wait}s timeout (waited {elapsed:.1f}s)")
+                logger.error("This suggests the import is hanging. Possible causes:")
+                logger.error("  - Missing dependencies (check requirements.txt)")
+                logger.error("  - Network issues preventing model downloads")
+                logger.error("  - Blocking operations in module initialization")
+                logger.error("  - Insufficient resources (memory/CPU)")
+                
+                # Try to get more info about the module state
+                try:
+                    module_file = getattr(langchain_agent_module, '__file__', 'unknown')
+                    logger.error(f"Module file: {module_file}")
+                except:
+                    pass
+                    
+                raise RuntimeError(f"Module import did not complete within {max_wait}s timeout")
     else:
         logger.info("🔄 Starting import of langchain_agent (outside lock)...")
         logger.info("⏳ Importing module (this may take 1-2 minutes on first load due to heavy dependencies)...")
