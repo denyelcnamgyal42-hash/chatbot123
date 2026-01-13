@@ -709,17 +709,17 @@ def get_agent():
             if hasattr(module, 'whatsapp_agent'):
                 logger.info("✅ Module already fully initialized in sys.modules, reusing...")
                 langchain_agent_module = module
-        else:
-            logger.info("⚠️ Module in sys.modules but not fully initialized (circular import), forcing fresh import...")
-            # Remove from sys.modules to force fresh import
-            del sys.modules['langchain_agent']
-            logger.info("🔄 Removed from sys.modules, importing fresh...")
-            try:
-                langchain_agent_module = importlib.import_module('langchain_agent')
-                logger.info("✅ Fresh module imported successfully")
-            except Exception as import_err:
-                logger.error(f"❌ Import failed: {import_err}", exc_info=True)
-                raise
+            else:
+                logger.info("⚠️ Module in sys.modules but not fully initialized (circular import), forcing fresh import...")
+                # Remove from sys.modules to force fresh import
+                del sys.modules['langchain_agent']
+                logger.info("🔄 Removed from sys.modules, importing fresh...")
+                try:
+                    langchain_agent_module = importlib.import_module('langchain_agent')
+                    logger.info("✅ Fresh module imported successfully")
+                except Exception as import_err:
+                    logger.error(f"❌ Import failed: {import_err}", exc_info=True)
+                    raise
         else:
             logger.info("📦 Importing fresh module...")
             try:
